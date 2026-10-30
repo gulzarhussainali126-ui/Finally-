@@ -1,0 +1,98 @@
+name: W-Bot07
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */5 * * *'
+
+concurrency:
+  group: whatsapp-bot-w07
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Wait 25 seconds (let the old run save its session)
+        run: sleep 25
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          git config --global url."https://github.com/".insteadOf ssh://git@github.com/
+          git config --global --add url."https://github.com/".insteadOf git@github.com:
+          npm install --no-audit --no-fund
+
+      - name: Syntax check
+        run: node --check index.js
+
+      - name: Restore session
+        run: |
+          rm -rf session_bot
+          if git clone --branch session --single-branch --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" session_bot; then
+            rm -rf session_bot/.git
+            echo "Session restored."
+          else
+            mkdir -p session_bot
+            echo "No saved session, starting fresh."
+          fi
+          cat > "$RUNNER_TEMP/save_session.sh" <<'EOF'
+          #!/bin/bash
+          SRC="$GITHUB_WORKSPACE/session_bot"
+          if [ ! -f "$SRC/creds.json" ]; then
+            echo "[save] no creds.json yet, skipping"
+            exit 0
+          fi
+          TMP=$(mktemp -d)
+          cp -r "$SRC" "$TMP/session_bot"
+          cd "$TMP/session_bot" || exit 0
+          rm -rf .git
+          git init -q -b session
+          git config user.name "wa-bot"
+          git config user.email "wa-bot@users.noreply.github.com"
+          git add -A
+          git commit -q -m "session $(date -u +%FT%TZ)"
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" session && echo "[save] session pushed"
+          cd /
+          rm -rf "$TMP"
+          EOF
+          chmod +x "$RUNNER_TEMP/save_session.sh"
+
+      - name: Run bot
+        timeout-minutes: 335
+        continue-on-error: true
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          ADMIN_SHEET_URL: ${{ secrets.ADMIN_SHEET_URL }}
+          PRODUCTS_SHEET_URL: ${{ secrets.PRODUCTS_SHEET_URL }}
+          BOT_NUMBER: ${{ secrets.BOT_NUMBER }}
+        run: |
+          (
+            while true; do
+              sleep 240
+              bash "$RUNNER_TEMP/save_session.sh" || true
+            done
+          ) &
+          LOOP_PID=$!
+          node index.js
+          kill $LOOP_PID 2>/dev/null || true
+
+      - name: Save session (final)
+        if: always()
+        run: bash "$RUNNER_TEMP/save_session.sh" || true
+        
