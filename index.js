@@ -16,7 +16,7 @@ const SETTINGS = {
   CITY: 'Lahore',
   CALL_PHONE: '03XX-XXXXXXX',             // PLACEHOLDER: number customers call
   OPENING_HOURS: '12:00 PM - 12:00 AM (daily)',
-  BOT_NUMBER: '03XXXXXXXXX',              // PLACEHOLDER: WhatsApp number the bot runs on
+  BOT_NUMBER: '03086279581',              // PLACEHOLDER: WhatsApp number the bot runs on
   OWNER_NUMBER: '',                       // optional, order/booking alerts go here (03XXXXXXXXX)
   FLOW: 'ORDER',                          // 'ORDER' | 'BOOKING' | 'INFO'
   CURRENCY: 'Rs',
